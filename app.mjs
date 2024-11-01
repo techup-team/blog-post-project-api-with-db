@@ -7,6 +7,10 @@ const port = process.env.PORT || 4001;
 app.use(cors());
 app.use(express.json());
 
+app.get("/", (req, res) => {
+  res.send("Hello TechUp!");
+});
+
 app.get("/profiles", (req, res) => {
   return res.json({
     data: {
