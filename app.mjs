@@ -1,6 +1,7 @@
 import express from "express";
 import cors from "cors";
 import connectionPool from "./utils/db.mjs";
+import validatePostData from "./middleware/postValidation.mjs";
 
 const app = express();
 const port = process.env.PORT || 4001;
@@ -12,7 +13,7 @@ app.get("/", (req, res) => {
   res.send("Hello TechUp!");
 });
 
-app.post("/posts", async (req, res) => {
+app.post("/posts", validatePostData, async (req, res) => {
   // ลอจิกในการเก็บข้อมูลของโพสต์ลงในฐานข้อมูล
 
   // 1) Access ข้อมูลใน Body จาก Request ด้วย req.body
@@ -183,7 +184,7 @@ app.get("/posts/:postId", async (req, res) => {
   }
 });
 
-app.put("/posts/:postId", async (req, res) => {
+app.put("/posts/:postId", validatePostData, async (req, res) => {
   // ลอจิกในการแก้ไขข้อมูลโพสต์ด้วย Id ในระบบ
 
   // 1) Access ตัว Endpoint Parameter ด้วย req.params
