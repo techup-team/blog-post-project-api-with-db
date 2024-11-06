@@ -193,7 +193,7 @@ app.put("/posts/:postId", async (req, res) => {
 
   try {
     // 2) เขียน Query เพื่อแก้ไขข้อมูลโพสต์ ด้วย Connection Pool
-    await connectionPool.query(
+    const result = await connectionPool.query(
       `
         UPDATE posts
         SET title = $2,
@@ -217,6 +217,12 @@ app.put("/posts/:postId", async (req, res) => {
       ]
     );
 
+    if (result.rowCount === 0) {
+      return res.status(404).json({
+        message: `Server could not find a requested post to update (post id: ${postIdFromClient})`,
+      });
+    }
+
     // 3) Return ตัว Response กลับไปหา Client
     return res.status(200).json({
       message: "Updated post successfully",
@@ -237,11 +243,17 @@ app.delete("/posts/:postId", async (req, res) => {
 
   try {
     // 2) เขียน Query เพื่อลบข้อมูลโพสต์ ด้วย Connection Pool
-    await connectionPool.query(
+    const result = await connectionPool.query(
       `DELETE FROM posts
        WHERE id = $1`,
       [postIdFromClient]
     );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({
+        message: `Server could not find a requested post to delete (post id: ${postIdFromClient})`,
+      });
+    }
 
     // 3) Return ตัว Response กลับไปหา Client
     return res.status(200).json({
