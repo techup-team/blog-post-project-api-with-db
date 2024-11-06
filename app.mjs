@@ -175,9 +175,7 @@ app.get("/posts/:postId", async (req, res) => {
     }
 
     // 3) Return ตัว Response กลับไปหา Client
-    return res.status(200).json({
-      data: results.rows[0],
-    });
+    return res.status(200).json(results.rows[0]);
   } catch {
     return res.status(500).json({
       message: `Server could not read post because database issue`,
