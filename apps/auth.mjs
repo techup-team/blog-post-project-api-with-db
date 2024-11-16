@@ -12,6 +12,17 @@ authRouter.post("/register", async (req, res) => {
   const { email, password, username, name } = req.body;
 
   try {
+    // Check if the username already exists in the database
+    const usernameCheckQuery = `SELECT * FROM users WHERE username = $1`;
+    const usernameCheckValues = [username];
+    const { rows: existingUser } = await connectionPool.query(
+      usernameCheckQuery,
+      usernameCheckValues
+    );
+
+    if (existingUser.length > 0) {
+      return res.status(400).json({ error: "Username is already taken" });
+    }
     // Sign up the new user using Supabase
     const { data, error: supabaseError } = await supabase.auth.signUp({
       email,
@@ -20,6 +31,12 @@ authRouter.post("/register", async (req, res) => {
 
     // Check for Supabase errors
     if (supabaseError) {
+      if (supabaseError.code === "user_already_exists") {
+        return res
+          .status(400)
+          .json({ error: "User with this email already exists" });
+      }
+      // Handle other Supabase errors
       return res
         .status(400)
         .json({ error: "Failed to create user. Please try again." });
@@ -55,6 +72,15 @@ authRouter.post("/login", async (req, res) => {
     });
 
     if (error) {
+      // Check if the error is due to incorrect credentials
+      if (
+        error.code === "invalid_credentials" ||
+        error.message.includes("Invalid login credentials")
+      ) {
+        return res.status(400).json({
+          error: "Your password is incorrect or this email doesn’t exist",
+        });
+      }
       return res.status(400).json({ error: error.message });
     }
 
@@ -62,7 +88,7 @@ authRouter.post("/login", async (req, res) => {
       message: "Signed in successfully",
       access_token: data.session.access_token,
     });
-  } catch (error) {
+  } catch {
     return res.status(500).json({ error: "An error occurred during login" });
   }
 });
@@ -94,8 +120,7 @@ authRouter.get("/get-user", async (req, res) => {
       role: rows[0].role,
       profilePic: rows[0].profile_pic,
     });
-  } catch (err) {
-    console.error("Error fetching user info:", err.message);
+  } catch {
     res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -145,8 +170,7 @@ authRouter.put("/reset-password", async (req, res) => {
       message: "Password updated successfully",
       user: data.user, // Optionally return the updated user data
     });
-  } catch (err) {
-    console.error("Error updating password:", err.message);
+  } catch {
     res.status(500).json({ error: "Internal server error" });
   }
 });
