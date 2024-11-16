@@ -1,10 +1,11 @@
 import { Router } from "express";
 import validatePostData from "../middleware/postValidation.mjs";
 import connectionPool from "../utils/db.mjs";
+import protectAdmin from "../middleware/protectAdmin.mjs";
 
 const postRouter = Router();
 
-postRouter.post("/", validatePostData, async (req, res) => {
+postRouter.post("/", [validatePostData, protectAdmin], async (req, res) => {
   // ลอจิกในการเก็บข้อมูลของโพสต์ลงในฐานข้อมูล
 
   // 1) Access ข้อมูลใน Body จาก Request ด้วย req.body
@@ -114,7 +115,7 @@ postRouter.get("/", async (req, res) => {
     }
 
     const countResult = await connectionPool.query(countQuery, countValues);
-    const totalPosts = parseInt(countResult.rows[0].count, 10);
+    const totalPosts = Number(countResult.rows[0].count);
 
     // 8) สร้าง response พร้อมข้อมูลการแบ่งหน้า (pagination)
     const results = {
@@ -175,18 +176,21 @@ postRouter.get("/:postId", async (req, res) => {
   }
 });
 
-postRouter.put("/:postId", validatePostData, async (req, res) => {
-  // ลอจิกในการแก้ไขข้อมูลโพสต์ด้วย Id ในระบบ
+postRouter.put(
+  "/:postId",
+  [validatePostData, protectAdmin],
+  async (req, res) => {
+    // ลอจิกในการแก้ไขข้อมูลโพสต์ด้วย Id ในระบบ
 
-  // 1) Access ตัว Endpoint Parameter ด้วย req.params
-  // และข้อมูลโพสต์ที่ Client ส่งมาแก้ไขจาก Body ของ Request
-  const postIdFromClient = req.params.postId;
-  const updatedPost = { ...req.body, date: new Date() };
+    // 1) Access ตัว Endpoint Parameter ด้วย req.params
+    // และข้อมูลโพสต์ที่ Client ส่งมาแก้ไขจาก Body ของ Request
+    const postIdFromClient = req.params.postId;
+    const updatedPost = { ...req.body, date: new Date() };
 
-  try {
-    // 2) เขียน Query เพื่อแก้ไขข้อมูลโพสต์ ด้วย Connection Pool
-    const result = await connectionPool.query(
-      `
+    try {
+      // 2) เขียน Query เพื่อแก้ไขข้อมูลโพสต์ ด้วย Connection Pool
+      const result = await connectionPool.query(
+        `
           UPDATE posts
           SET title = $2,
               image = $3,
@@ -197,37 +201,38 @@ postRouter.put("/:postId", validatePostData, async (req, res) => {
               date = $8
           WHERE id = $1
         `,
-      [
-        postIdFromClient,
-        updatedPost.title,
-        updatedPost.image,
-        updatedPost.category_id,
-        updatedPost.description,
-        updatedPost.content,
-        updatedPost.status_id,
-        updatedPost.date,
-      ]
-    );
+        [
+          postIdFromClient,
+          updatedPost.title,
+          updatedPost.image,
+          updatedPost.category_id,
+          updatedPost.description,
+          updatedPost.content,
+          updatedPost.status_id,
+          updatedPost.date,
+        ]
+      );
 
-    if (result.rowCount === 0) {
-      return res.status(404).json({
-        message: `Server could not find a requested post to update (post id: ${postIdFromClient})`,
+      if (result.rowCount === 0) {
+        return res.status(404).json({
+          message: `Server could not find a requested post to update (post id: ${postIdFromClient})`,
+        });
+      }
+
+      // 3) Return ตัว Response กลับไปหา Client
+      return res.status(200).json({
+        message: "Updated post successfully",
+      });
+    } catch {
+      // จัดการข้อผิดพลาดที่อาจเกิดขึ้นขณะ Query ฐานข้อมูล
+      return res.status(500).json({
+        message: `Server could not update post because database connection`,
       });
     }
-
-    // 3) Return ตัว Response กลับไปหา Client
-    return res.status(200).json({
-      message: "Updated post successfully",
-    });
-  } catch {
-    // จัดการข้อผิดพลาดที่อาจเกิดขึ้นขณะ Query ฐานข้อมูล
-    return res.status(500).json({
-      message: `Server could not update post because database connection`,
-    });
   }
-});
+);
 
-postRouter.delete("/:postId", async (req, res) => {
+postRouter.delete("/:postId", protectAdmin, async (req, res) => {
   // ลอจิกในการลบข้อมูลโพสต์ด้วย Id ในระบบ
 
   // 1) Access ตัว Endpoint Parameter ด้วย req.params
