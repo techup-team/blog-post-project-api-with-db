@@ -21,7 +21,7 @@ authRouter.post("/register", async (req, res) => {
     );
 
     if (existingUser.length > 0) {
-      return res.status(400).json({ error: "Username is already taken" });
+      return res.status(400).json({ error: "This Username is already taken" });
     }
     // Sign up the new user using Supabase
     const { data, error: supabaseError } = await supabase.auth.signUp({
