@@ -36,6 +36,7 @@ postRouter.post("/", [validatePostData, protectAdmin], async (req, res) => {
   return res.status(201).json({ message: "Created post successfully" });
 });
 
+// get all published posts
 postRouter.get("/", async (req, res) => {
   // ลอจิกในอ่านข้อมูลโพสต์ทั้งหมดในระบบ
   try {
@@ -61,8 +62,9 @@ postRouter.get("/", async (req, res) => {
     FROM posts
     INNER JOIN categories ON posts.category_id = categories.id
     INNER JOIN statuses ON posts.status_id = statuses.id
+    WHERE statuses.id = 2 
   `;
-    let values = [];
+    let values = []; // status id = 2 means showing only publish post
 
     // 4) เขียน query จากเงื่อนไขของการใส่ query parameter category และ keyword
     if (category && keyword) {
@@ -99,6 +101,7 @@ postRouter.get("/", async (req, res) => {
         FROM posts
         INNER JOIN categories ON posts.category_id = categories.id
         INNER JOIN statuses ON posts.status_id = statuses.id
+        WHERE statuses.id = 2 
       `;
     let countValues = values.slice(0, -2); // ลบค่า limit และ offset ออกจาก values
 
@@ -145,6 +148,35 @@ postRouter.get("/", async (req, res) => {
   }
 });
 
+// get all posts including draft
+postRouter.get("/admin", protectAdmin, async (req, res) => {
+  try {
+    // Query all posts with their category and status for admin view
+    const query = `
+      SELECT 
+          posts.*, 
+          categories.name AS category, 
+          statuses.status
+      FROM posts
+      INNER JOIN categories ON posts.category_id = categories.id
+      INNER JOIN statuses ON posts.status_id = statuses.id
+      ORDER BY posts.date DESC;
+    `;
+
+    // Execute the query
+    const result = await connectionPool.query(query);
+
+    // Return all posts as the response
+    return res.status(200).json({
+      posts: result.rows,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      message: "Server could not read posts because of a database issue",
+    });
+  }
+});
+
 postRouter.get("/:postId", async (req, res) => {
   // ลอจิกในอ่านข้อมูลโพสต์ด้วย Id ในระบบ
   // 1) Access ตัว Endpoint Parameter ด้วย req.params
@@ -162,8 +194,9 @@ postRouter.get("/:postId", async (req, res) => {
     INNER JOIN categories ON posts.category_id = categories.id
     INNER JOIN statuses ON posts.status_id = statuses.id
     WHERE posts.id = $1
+    AND statuses.id = 2 
   `,
-      [postIdFromClient]
+      [postIdFromClient] // status id = 2 means showing only publish post
     );
 
     // เพิ่ม Conditional logic ว่าถ้าข้อมูลที่ได้กลับมาจากฐานข้อมูลเป็นค่า false (null / undefined)
@@ -175,7 +208,46 @@ postRouter.get("/:postId", async (req, res) => {
 
     // 3) Return ตัว Response กลับไปหา Client
     return res.status(200).json(results.rows[0]);
-  } catch {
+  } catch (err) {
+    console.log(err);
+    return res.status(500).json({
+      message: `Server could not read post because database issue`,
+    });
+  }
+});
+
+postRouter.get("/admin/:postId", protectAdmin, async (req, res) => {
+  // ลอจิกในอ่านข้อมูลโพสต์ด้วย Id ในระบบ
+  // 1) Access ตัว Endpoint Parameter ด้วย req.params
+  const postIdFromClient = req.params.postId;
+
+  try {
+    // 2) เขียน Query เพื่ออ่านข้อมูลโพสต์ ด้วย Connection Pool
+    const results = await connectionPool.query(
+      `
+    SELECT 
+        posts.*, 
+        categories.name AS category, 
+        statuses.status
+    FROM posts
+    INNER JOIN categories ON posts.category_id = categories.id
+    INNER JOIN statuses ON posts.status_id = statuses.id
+    WHERE posts.id = $1
+  `,
+      [postIdFromClient] // status id = 2 means showing only publish post
+    );
+
+    // เพิ่ม Conditional logic ว่าถ้าข้อมูลที่ได้กลับมาจากฐานข้อมูลเป็นค่า false (null / undefined)
+    if (!results.rows[0]) {
+      return res.status(404).json({
+        message: `Server could not find a requested post (post id: ${postIdFromClient})`,
+      });
+    }
+
+    // 3) Return ตัว Response กลับไปหา Client
+    return res.status(200).json(results.rows[0]);
+  } catch (err) {
+    console.log(err);
     return res.status(500).json({
       message: `Server could not read post because database issue`,
     });
