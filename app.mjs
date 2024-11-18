@@ -1,6 +1,7 @@
 import express from "express";
 import cors from "cors";
 import postRouter from "./apps/postRouter.mjs";
+import categoryRouter from "./apps/categoryRouter.mjs";
 import authRouter from "./apps/auth.mjs";
 
 const app = express();
@@ -14,6 +15,7 @@ app.get("/", (req, res) => {
 });
 
 app.use("/posts", postRouter);
+app.use("/categories", categoryRouter);
 app.use("/auth", authRouter);
 
 app.listen(port, () => {

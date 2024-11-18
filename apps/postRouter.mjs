@@ -54,11 +54,14 @@ postRouter.get("/", async (req, res) => {
 
     // 3) เขียน Query เพื่อ Insert ข้อมูลโพสต์ ด้วย Connection Pool
     let query = `
-        SELECT posts.id, posts.image, categories.name AS category, posts.title, posts.description, posts.date, posts.content, statuses.status, posts.likes_count
-        FROM posts
-        INNER JOIN categories ON posts.category_id = categories.id
-        INNER JOIN statuses ON posts.status_id = statuses.id
-      `;
+    SELECT 
+        posts.*, 
+        categories.name AS category, 
+        statuses.status
+    FROM posts
+    INNER JOIN categories ON posts.category_id = categories.id
+    INNER JOIN statuses ON posts.status_id = statuses.id
+  `;
     let values = [];
 
     // 4) เขียน query จากเงื่อนไขของการใส่ query parameter category และ keyword
@@ -151,12 +154,15 @@ postRouter.get("/:postId", async (req, res) => {
     // 2) เขียน Query เพื่ออ่านข้อมูลโพสต์ ด้วย Connection Pool
     const results = await connectionPool.query(
       `
-        SELECT posts.id, posts.image, categories.name AS category, posts.title, posts.description, posts.date, posts.content, statuses.status, posts.likes_count
-        FROM posts
-        INNER JOIN categories ON posts.category_id = categories.id
-        INNER JOIN statuses ON posts.status_id = statuses.id
-        WHERE posts.id = $1
-        `,
+    SELECT 
+        posts.*, 
+        categories.name AS category, 
+        statuses.status
+    FROM posts
+    INNER JOIN categories ON posts.category_id = categories.id
+    INNER JOIN statuses ON posts.status_id = statuses.id
+    WHERE posts.id = $1
+  `,
       [postIdFromClient]
     );
 
