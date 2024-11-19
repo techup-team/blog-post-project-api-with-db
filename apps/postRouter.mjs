@@ -232,7 +232,6 @@ postRouter.get("/admin/:postId", protectAdmin, async (req, res) => {
     FROM posts
     INNER JOIN categories ON posts.category_id = categories.id
     INNER JOIN statuses ON posts.status_id = statuses.id
-    WHERE posts.id = $1
   `,
       [postIdFromClient] // status id = 2 means showing only publish post
     );
