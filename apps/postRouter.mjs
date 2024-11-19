@@ -69,18 +69,18 @@ postRouter.get("/", async (req, res) => {
     // 4) เขียน query จากเงื่อนไขของการใส่ query parameter category และ keyword
     if (category && keyword) {
       query += `
-          WHERE categories.name ILIKE $1 
+          AND categories.name ILIKE $1 
           AND (posts.title ILIKE $2 OR posts.description ILIKE $2 OR posts.content ILIKE $2)
         `;
       values = [`%${category}%`, `%${keyword}%`];
     } else if (category) {
-      query += " WHERE categories.name ILIKE $1";
+      query += " AND categories.name ILIKE $1";
       values = [`%${category}%`];
     } else if (keyword) {
       query += `
-          WHERE posts.title ILIKE $1 
+          AND (posts.title ILIKE $1 
           OR posts.description ILIKE $1 
-          OR posts.content ILIKE $1
+          OR posts.content ILIKE $1)
         `;
       values = [`%${keyword}%`];
     }
@@ -107,16 +107,16 @@ postRouter.get("/", async (req, res) => {
 
     if (category && keyword) {
       countQuery += `
-          WHERE categories.name ILIKE $1 
+          AND categories.name ILIKE $1 
           AND (posts.title ILIKE $2 OR posts.description ILIKE $2 OR posts.content ILIKE $2)
         `;
     } else if (category) {
-      countQuery += " WHERE categories.name ILIKE $1";
+      countQuery += " AND categories.name ILIKE $1";
     } else if (keyword) {
       countQuery += `
-          WHERE posts.title ILIKE $1 
+          AND (posts.title ILIKE $1 
           OR posts.description ILIKE $1 
-          OR posts.content ILIKE $1
+          OR posts.content ILIKE $1)
         `;
     }
 
