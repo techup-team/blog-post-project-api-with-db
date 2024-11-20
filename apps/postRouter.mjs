@@ -6,7 +6,7 @@ import multer from "multer";
 
 const postRouter = Router();
 
-const multerUpload = multer({ dest: "public\\files" });
+const multerUpload = multer({ storage: multer.memoryStorage() });
 
 const imageFileUpload = multerUpload.fields([
   { name: "imageFile", maxCount: 1 },
