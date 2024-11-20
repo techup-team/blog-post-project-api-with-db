@@ -2,39 +2,73 @@ import { Router } from "express";
 import validatePostData from "../middleware/postValidation.mjs";
 import connectionPool from "../utils/db.mjs";
 import protectAdmin from "../middleware/protectAdmin.mjs";
+import multer from "multer";
 
 const postRouter = Router();
 
-postRouter.post("/", [validatePostData, protectAdmin], async (req, res) => {
-  // ลอจิกในการเก็บข้อมูลของโพสต์ลงในฐานข้อมูล
+const multerUpload = multer({ dest: "public\\files" });
 
-  // 1) Access ข้อมูลใน Body จาก Request ด้วย req.body
-  const newPost = req.body;
+const imageFileUpload = multerUpload.fields([
+  { name: "imageFile", maxCount: 1 },
+]);
 
-  // 2) เขียน Query เพื่อ Insert ข้อมูลโพสต์ ด้วย Connection Pool
-  try {
-    const query = `INSERT INTO posts (title, image, category_id, description, content, status_id)
+postRouter.post(
+  "/",
+  [validatePostData, protectAdmin, imageFileUpload],
+  async (req, res) => {
+    // ลอจิกในการเก็บข้อมูลของโพสต์ลงในฐานข้อมูล
+
+    // 1) Access ข้อมูลใน Body จาก Request ด้วย req.body
+    const newPost = req.body;
+    const file = req.file; // The image file from the request
+
+    // Define the Supabase Storage bucket name (replace with your bucket name)
+    const bucketName = "my-personal-blog";
+    const filePath = `posts/${Date.now()}-${file.originalname}`; // Unique file path
+
+    // 2) เขียน Query เพื่อ Insert ข้อมูลโพสต์ ด้วย Connection Pool
+    try {
+      // Upload the image to Supabase storage
+      const { data, error } = await supabase.storage
+        .from(bucketName)
+        .upload(filePath, file.path);
+
+      if (error) {
+        throw error; // If an error occurs while uploading
+      }
+
+      // Get the public URL of the uploaded file
+      const { publicURL, error: urlError } = supabase.storage
+        .from(bucketName)
+        .getPublicUrl(filePath);
+
+      if (urlError) {
+        throw urlError;
+      }
+
+      const query = `INSERT INTO posts (title, image, category_id, description, content, status_id)
       values ($1, $2, $3, $4, $5, $6)`;
 
-    const values = [
-      newPost.title,
-      newPost.image,
-      newPost.category_id,
-      newPost.description,
-      newPost.content,
-      newPost.status_id,
-    ];
+      const values = [
+        newPost.title,
+        publicURL,
+        newPost.category_id,
+        newPost.description,
+        newPost.content,
+        newPost.status_id,
+      ];
 
-    await connectionPool.query(query, values);
-  } catch {
-    return res.status(500).json({
-      message: `Server could not create post because database connection`,
-    });
+      await connectionPool.query(query, values);
+    } catch {
+      return res.status(500).json({
+        message: `Server could not create post because database connection`,
+      });
+    }
+
+    // 3) Return ตัว Response กลับไปหา Client ว่าสร้างสำเร็จ
+    return res.status(201).json({ message: "Created post successfully" });
   }
-
-  // 3) Return ตัว Response กลับไปหา Client ว่าสร้างสำเร็จ
-  return res.status(201).json({ message: "Created post successfully" });
-});
+);
 
 // get all published posts
 postRouter.get("/", async (req, res) => {
