@@ -1,5 +1,5 @@
 // middleware/validatePostData.js
-
+//stop using this middleware because it cause file uploading bug
 function validatePostData(req, res, next) {
   const { title, image, category_id, description, content, status_id } =
     req.body;

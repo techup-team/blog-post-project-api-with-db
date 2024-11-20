@@ -1,8 +1,13 @@
 import { Router } from "express";
-import validatePostData from "../middleware/postValidation.mjs";
 import connectionPool from "../utils/db.mjs";
 import protectAdmin from "../middleware/protectAdmin.mjs";
 import multer from "multer";
+import { createClient } from "@supabase/supabase-js";
+
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_ANON_KEY
+);
 
 const postRouter = Router();
 
@@ -12,63 +17,57 @@ const imageFileUpload = multerUpload.fields([
   { name: "imageFile", maxCount: 1 },
 ]);
 
-postRouter.post(
-  "/",
-  [validatePostData, protectAdmin, imageFileUpload],
-  async (req, res) => {
-    // ลอจิกในการเก็บข้อมูลของโพสต์ลงในฐานข้อมูล
+postRouter.post("/", [imageFileUpload, protectAdmin], async (req, res) => {
+  // ลอจิกในการเก็บข้อมูลของโพสต์ลงในฐานข้อมูล
 
-    // 1) Access ข้อมูลใน Body จาก Request ด้วย req.body
-    const newPost = req.body;
-    const file = req.file; // The image file from the request
+  // 1) Access ข้อมูลใน Body จาก Request ด้วย req.body
+  const newPost = req.body;
+  const file = req.files.imageFile[0];
 
-    // Define the Supabase Storage bucket name (replace with your bucket name)
-    const bucketName = "my-personal-blog";
-    const filePath = `posts/${Date.now()}-${file.originalname}`; // Unique file path
+  // Define the Supabase Storage bucket name (replace with your bucket name)
+  const bucketName = "my-personal-blog";
+  const filePath = `posts/${Date.now()}`; // Unique file path
 
-    // 2) เขียน Query เพื่อ Insert ข้อมูลโพสต์ ด้วย Connection Pool
-    try {
-      // Upload the image to Supabase storage
-      const { data, error } = await supabase.storage
-        .from(bucketName)
-        .upload(filePath, file.path);
+  // 2) เขียน Query เพื่อ Insert ข้อมูลโพสต์ ด้วย Connection Pool
+  try {
+    // Upload the image to Supabase storage
+    const { data, error } = await supabase.storage
+      .from(bucketName)
+      .upload(filePath, file.buffer, {
+        contentType: file.mimetype,
+        upsert: false, // Prevent overwriting the file
+      });
 
-      if (error) {
-        throw error; // If an error occurs while uploading
-      }
+    if (error) {
+      throw error; // If an error occurs while uploading
+    }
+    // Get the public URL of the uploaded file
+    const {
+      data: { publicUrl },
+    } = supabase.storage.from(bucketName).getPublicUrl(data.path);
 
-      // Get the public URL of the uploaded file
-      const { publicURL, error: urlError } = supabase.storage
-        .from(bucketName)
-        .getPublicUrl(filePath);
-
-      if (urlError) {
-        throw urlError;
-      }
-
-      const query = `INSERT INTO posts (title, image, category_id, description, content, status_id)
+    const query = `INSERT INTO posts (title, image, category_id, description, content, status_id)
       values ($1, $2, $3, $4, $5, $6)`;
 
-      const values = [
-        newPost.title,
-        publicURL,
-        newPost.category_id,
-        newPost.description,
-        newPost.content,
-        newPost.status_id,
-      ];
+    const values = [
+      newPost.title,
+      publicUrl,
+      parseInt(newPost.category_id),
+      newPost.description,
+      newPost.content,
+      parseInt(newPost.status_id),
+    ];
 
-      await connectionPool.query(query, values);
-    } catch {
-      return res.status(500).json({
-        message: `Server could not create post because database connection`,
-      });
-    }
-
-    // 3) Return ตัว Response กลับไปหา Client ว่าสร้างสำเร็จ
-    return res.status(201).json({ message: "Created post successfully" });
+    await connectionPool.query(query, values);
+  } catch (err) {
+    return res.status(500).json({
+      message: `Server could not create post because database connection`,
+    });
   }
-);
+
+  // 3) Return ตัว Response กลับไปหา Client ว่าสร้างสำเร็จ
+  return res.status(201).json({ message: "Created post successfully" });
+});
 
 // get all published posts
 postRouter.get("/", async (req, res) => {
@@ -243,7 +242,6 @@ postRouter.get("/:postId", async (req, res) => {
     // 3) Return ตัว Response กลับไปหา Client
     return res.status(200).json(results.rows[0]);
   } catch (err) {
-    console.log(err);
     return res.status(500).json({
       message: `Server could not read post because database issue`,
     });
@@ -289,17 +287,46 @@ postRouter.get("/admin/:postId", protectAdmin, async (req, res) => {
 
 postRouter.put(
   "/:postId",
-  [validatePostData, protectAdmin],
+  [imageFileUpload, protectAdmin],
   async (req, res) => {
-    // ลอจิกในการแก้ไขข้อมูลโพสต์ด้วย Id ในระบบ
-
-    // 1) Access ตัว Endpoint Parameter ด้วย req.params
-    // และข้อมูลโพสต์ที่ Client ส่งมาแก้ไขจาก Body ของ Request
     const postIdFromClient = req.params.postId;
     const updatedPost = { ...req.body, date: new Date() };
 
+    // Define the Supabase Storage bucket name
+    const bucketName = "my-personal-blog";
+
     try {
-      // 2) เขียน Query เพื่อแก้ไขข้อมูลโพสต์ ด้วย Connection Pool
+      let publicUrl = updatedPost.image; // Default to the existing image URL
+      const file = req.files?.imageFile?.[0]; // Check if a new file is attached
+
+      if (file) {
+        // If a new image file is attached, upload it to Supabase
+        const filePath = `posts/${Date.now()}`; // Unique file path
+
+        const { data, error } = await supabase.storage
+          .from(bucketName)
+          .upload(filePath, file.buffer, {
+            contentType: file.mimetype,
+            upsert: false, // Prevent overwriting existing files
+          });
+
+        if (error) {
+          throw error; // If Supabase upload fails
+        }
+
+        // Get the public URL of the uploaded file
+        const response = supabase.storage
+          .from(bucketName)
+          .getPublicUrl(data.path);
+
+        if (response.error) {
+          throw response.error;
+        }
+
+        publicUrl = response.data.publicUrl;
+      }
+
+      // Update the database
       const result = await connectionPool.query(
         `
           UPDATE posts
@@ -315,11 +342,11 @@ postRouter.put(
         [
           postIdFromClient,
           updatedPost.title,
-          updatedPost.image,
-          updatedPost.category_id,
+          publicUrl, // Updated image URL
+          parseInt(updatedPost.category_id),
           updatedPost.description,
           updatedPost.content,
-          updatedPost.status_id,
+          parseInt(updatedPost.status_id),
           updatedPost.date,
         ]
       );
@@ -330,14 +357,13 @@ postRouter.put(
         });
       }
 
-      // 3) Return ตัว Response กลับไปหา Client
       return res.status(200).json({
         message: "Updated post successfully",
       });
-    } catch {
-      // จัดการข้อผิดพลาดที่อาจเกิดขึ้นขณะ Query ฐานข้อมูล
+    } catch (err) {
+      console.error(err);
       return res.status(500).json({
-        message: `Server could not update post because database connection`,
+        message: `Server could not update post due to an error`,
       });
     }
   }
