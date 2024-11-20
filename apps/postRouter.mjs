@@ -232,6 +232,7 @@ postRouter.get("/admin/:postId", protectAdmin, async (req, res) => {
     FROM posts
     INNER JOIN categories ON posts.category_id = categories.id
     INNER JOIN statuses ON posts.status_id = statuses.id
+    WHERE posts.id = $1
   `,
       [postIdFromClient] // status id = 2 means showing only publish post
     );
@@ -245,8 +246,7 @@ postRouter.get("/admin/:postId", protectAdmin, async (req, res) => {
 
     // 3) Return ตัว Response กลับไปหา Client
     return res.status(200).json(results.rows[0]);
-  } catch (err) {
-    console.log(err);
+  } catch {
     return res.status(500).json({
       message: `Server could not read post because database issue`,
     });
