@@ -1,6 +1,7 @@
 import { Router } from "express";
 import connectionPool from "../utils/db.mjs";
 import protectAdmin from "../middleware/protectAdmin.mjs";
+import protectUser from "../middleware/protectUser.mjs";
 import multer from "multer";
 import { createClient } from "@supabase/supabase-js";
 
@@ -396,6 +397,149 @@ postRouter.delete("/:postId", protectAdmin, async (req, res) => {
   } catch {
     return res.status(500).json({
       message: `Server could not delete post because database connection`,
+    });
+  }
+});
+
+postRouter.get("/:postId/comments", async (req, res) => {
+  // ลอจิกในการอ่านข้อมูลคอมเมนต์ของโพสต์ด้วย Id ในระบบ
+
+  // 1) Access ตัว Endpoint Parameter ด้วย req.params
+  const postIdFromClient = req.params.postId;
+
+  try {
+    // 2) เขียน Query เพื่ออ่านข้อมูลคอมเมนต์ ด้วย Connection Pool
+    const results = await connectionPool.query(
+      `
+    SELECT 
+        comments.*, 
+        users.name,
+        users.username,
+        users.profile_pic,
+        users.role
+    FROM comments
+    INNER JOIN users ON comments.user_id = users.id
+    WHERE post_id = $1
+  `,
+      [postIdFromClient]
+    );
+
+    // 3) Return ตัว Response กลับไปหา Client
+    return res.status(200).json(results.rows);
+  } catch {
+    return res.status(500).json({
+      message: `Server could not read comments because database connection`,
+    });
+  }
+});
+
+postRouter.post("/:postId/comments", protectUser, async (req, res) => {
+  // ลอจิกในการสร้างข้อมูลคอมเมนต์ของโพสต์ด้วย Id ในระบบ
+  // 1) Access ตัว Endpoint Parameter ด้วย req.params
+  const postIdFromClient = req.params.postId;
+  const { id: userId } = req.user;
+  const { comment } = req.body;
+
+  if (!comment || comment.trim().length === 0) {
+    return res.status(400).json({ message: "Comment content cannot be empty" });
+  }
+
+  if (comment.length > 500) {
+    return res.status(400).json({
+      message: "Comment content exceeds the maximum length of 500 characters",
+    });
+  }
+  try {
+    // Insert the comment into the database
+    const query = `INSERT INTO comments (post_id, user_id, comment_text) VALUES ($1, $2, $3)`;
+    const values = [postIdFromClient, userId, comment];
+    await connectionPool.query(query, values);
+
+    // 3) Return ตัว Response กลับไปหา Client ว่าสร้างสำเร็จ
+    return res.status(201).json({ message: "Created comment successfully" });
+  } catch (err) {
+    console.error(err); // Log error for debugging
+    return res.status(500).json({
+      message:
+        "Server could not create comment due to a database connection issue",
+      error: err.message,
+    });
+  }
+});
+
+postRouter.get("/:postId/likes", async (req, res) => {
+  // ลอจิกในการนับจำนวนไลค์ของโพสต์ด้วย Id ในระบบ
+  // 1) Access ตัว Endpoint Parameter ด้วย req.params
+  const postIdFromClient = req.params.postId;
+  // 2) เขียน Query เพื่อนับจำนวนไลค์ ด้วย Connection Pool
+  try {
+    const results = await connectionPool.query(
+      `
+    SELECT 
+        COUNT(*) AS like_count
+    FROM likes
+    WHERE post_id = $1
+  `,
+      [postIdFromClient]
+    );
+    // 3) Return ตัว Response กลับไปหา Client
+    return res
+      .status(200)
+      .json({ like_count: Number(results.rows[0].like_count) });
+  } catch {
+    return res.status(500).json({
+      message: `Server could not count likes because database connection`,
+    });
+  }
+});
+
+postRouter.post("/:postId/likes", protectUser, async (req, res) => {
+  // Logic to create a like for a post with the given Id
+  // 1) Access the Endpoint Parameter with req.params
+  const postIdFromClient = req.params.postId;
+  const userId = req.user.id;
+  // 2) Write Query to create a like using Connection Pool
+  try {
+    const query = `INSERT INTO likes (post_id, user_id) VALUES ($1, $2)`;
+    const values = [postIdFromClient, userId];
+    await connectionPool.query(query, values);
+    // 3) Return the Response to the Client indicating success
+    return res.status(201).json({ message: "Created like successfully" });
+  } catch (err) {
+    return res.status(500).json({
+      message:
+        "Server could not create like because of a database connection issue",
+      error: err.message,
+    });
+  }
+});
+
+postRouter.delete("/:postId/likes", protectUser, async (req, res) => {
+  // Logic to delete a like for a post with the given Id
+  // 1) Access the Endpoint Parameter with req.params
+  const postIdFromClient = req.params.postId;
+  const userId = req.user.id;
+  // 2) Write Query to delete a like using Connection Pool
+  try {
+    // Query to delete the like based on post_id and user_id
+    const query = `DELETE FROM likes WHERE post_id = $1 AND user_id = $2`;
+    const values = [postIdFromClient, userId];
+
+    const result = await connectionPool.query(query, values);
+
+    // Check if a row was deleted
+    if (result.rowCount === 0) {
+      return res
+        .status(404)
+        .json({ message: "Like not found or you do not own this like" });
+    }
+
+    // 3) Return the Response to the Client indicating success
+    return res.status(200).json({ message: "Deleted like successfully" });
+  } catch (err) {
+    return res.status(500).json({
+      message: `Server could not delete like due to a database connection issue`,
+      error: err.message,
     });
   }
 });

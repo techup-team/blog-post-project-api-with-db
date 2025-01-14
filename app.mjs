@@ -4,6 +4,7 @@ import cors from "cors";
 import postRouter from "./apps/postRouter.mjs";
 import categoryRouter from "./apps/categoryRouter.mjs";
 import authRouter from "./apps/auth.mjs";
+import profileRouter from "./apps/profileRouter.mjs";
 
 const app = express();
 const port = process.env.PORT || 4001;
@@ -18,6 +19,7 @@ app.get("/", (req, res) => {
 app.use("/posts", postRouter);
 app.use("/categories", categoryRouter);
 app.use("/auth", authRouter);
+app.use("/profile", profileRouter);
 
 app.listen(port, () => {
   console.log(`Server is running at ${port}`);
