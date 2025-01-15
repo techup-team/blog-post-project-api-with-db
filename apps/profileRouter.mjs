@@ -42,7 +42,7 @@ profileRouter.put("/", [imageFileUpload, protectUser], async (req, res) => {
   try {
     // If a file is uploaded, upload it to Supabase Storage
     if (file) {
-      const bucketName = "user-profile-pictures"; // Adjust the bucket name as needed
+      const bucketName = "my-personal-blog"; // Adjust the bucket name as needed
       const filePath = `profiles/${userId}-${Date.now()}`; // Generate a unique file path
 
       const { data, error } = await supabase.storage
