@@ -420,6 +420,7 @@ postRouter.get("/:postId/comments", async (req, res) => {
     FROM comments
     INNER JOIN users ON comments.user_id = users.id
     WHERE post_id = $1
+    ORDER BY comments.created_at DESC
   `,
       [postIdFromClient]
     );
